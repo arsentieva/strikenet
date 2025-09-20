@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import List
 
 from fastapi import FastAPI, File, HTTPException, UploadFile, status
@@ -8,6 +9,9 @@ from app.config import get_settings
 from app.schemas import ClassificationResponse, ModelPrediction, SpeciesMetadata
 from app.services.inference import InferenceError, classify_image
 from app.data.species import lookup_species
+
+logger = logging.getLogger("strikenet.api")
+logger.setLevel(logging.INFO)
 
 app = FastAPI(title="StrikeNet Invasive Species Classifier")
 
@@ -19,7 +23,10 @@ async def healthcheck() -> dict[str, str]:
 
 @app.post("/api/classify", response_model=ClassificationResponse, tags=["classification"])
 async def classify_species(image: UploadFile = File(...)) -> ClassificationResponse:
+    logger.info("Received classification request", extra={"content_type": image.content_type})
+
     if not image.content_type or not image.content_type.startswith("image/"):
+        logger.warning("Rejected upload with unsupported content type", extra={"content_type": image.content_type})
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Only image uploads are supported."
@@ -27,13 +34,16 @@ async def classify_species(image: UploadFile = File(...)) -> ClassificationRespo
 
     image_bytes = await image.read()
     if not image_bytes:
+        logger.warning("Rejected upload with empty payload")
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
+    logger.info("Read image payload", extra={"size_bytes": len(image_bytes)})
     settings = get_settings()
 
     try:
         predictions_raw = await classify_image(image_bytes)
     except InferenceError as exc:
+        logger.exception("Inference call failed")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     predictions: List[ModelPrediction] = []
@@ -73,6 +83,15 @@ async def classify_species(image: UploadFile = File(...)) -> ClassificationRespo
 
     if not predictions:
         decision = "no-predictions"
+
+    logger.info(
+        "Classification completed",
+        extra={
+            "decision": decision,
+            "top_label": top_prediction.label if top_prediction else None,
+            "top_score": top_prediction.score if top_prediction else None,
+        },
+    )
 
     return ClassificationResponse(
         decision=decision,
