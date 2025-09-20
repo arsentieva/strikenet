@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: strikenet-api
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: STRIKENET_OPENAI_API_KEY
+        sync: false
+      - key: STRIKENET_OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: STRIKENET_OPENAI_TEMPERATURE
+        value: "0.0"
+      - key: STRIKENET_OPENAI_MAX_OUTPUT_TOKENS
+        value: "600"
+      - key: STRIKENET_TOP_K
+        value: "5"
+      - key: STRIKENET_CLASSIFICATION_CONFIDENCE_THRESHOLD
+        value: "0.6"
