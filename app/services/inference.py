@@ -36,7 +36,7 @@ class ModelPrediction:
     score: float
 
 
-async def classify_image(image_bytes: bytes, mime_type: str | None) -> List[ModelPrediction]:
+async def classify_image(image_bytes: bytes, mime_type: str | None) -> Any:
     """Send the image to the configured OpenAI vision-capable model."""
 
     client = OpenAI(api_key=API_KEY)
@@ -76,44 +76,6 @@ async def classify_image(image_bytes: bytes, mime_type: str | None) -> List[Mode
         logger.exception("OpenAI request failed")
         raise InferenceError(f"OpenAI request failed: {exc}") from exc
 
-    try:
-        text_output = response.output[0].content[0].text  # type: ignore[index]
-    except (AttributeError, IndexError, KeyError) as exc:
-        logger.exception("Unexpected response structure from OpenAI", extra={"response": response})
-        raise InferenceError("Unexpected response structure from OpenAI") from exc
+    return response.output[0].content[0].text
 
-    logger.info("Received raw prediction payload", extra={"raw_output": text_output})
 
-    try:
-        payload = json.loads(text_output)
-    except json.JSONDecodeError as exc:
-        logger.exception("Failed to parse OpenAI response JSON", extra={"raw_output": text_output})
-        raise InferenceError("Failed to parse OpenAI response JSON") from exc
-
-    raw_predictions = payload.get("predictions") if isinstance(payload, dict) else None
-    if not isinstance(raw_predictions, list):
-        raise InferenceError("OpenAI response missing predictions list")
-
-    predictions: List[ModelPrediction] = []
-    for entry in raw_predictions:
-        if not isinstance(entry, dict):
-            continue
-        label = entry.get("label")
-        confidence = entry.get("confidence")
-        if label is None or confidence is None:
-            continue
-        try:
-            predictions.append(ModelPrediction(label=str(label), score=float(confidence)))
-        except (TypeError, ValueError):
-            continue
-
-    logger.info(
-        "Parsed predictions",
-        extra={
-            "prediction_count": len(predictions),
-            "top_label": predictions[0].label if predictions else None,
-            "top_score": predictions[0].score if predictions else None,
-        },
-    )
-
-    return predictions

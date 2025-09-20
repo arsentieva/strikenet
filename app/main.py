@@ -1,13 +1,9 @@
 from __future__ import annotations
 
 import logging
-from typing import List
 from fastapi import FastAPI, File, HTTPException, UploadFile, status
 
-from app.schemas import ClassificationResponse, ModelPrediction, SpeciesMetadata
 from app.services.inference import InferenceError, classify_image
-from app.data.species import lookup_species
-import os
 
 logger = logging.getLogger("strikenet.api")
 logger.setLevel(logging.INFO)
@@ -20,8 +16,8 @@ async def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/api/classify", response_model=ClassificationResponse, tags=["classification"])
-async def classify_species(image: UploadFile = File(...)) -> ClassificationResponse:
+@app.post("/api/classify", tags=["classification"])
+async def classify_species(image: UploadFile = File(...)):
     logger.info("Received classification request", extra={"content_type": image.content_type})
 
     if not image.content_type or not image.content_type.startswith("image/"):
@@ -37,65 +33,10 @@ async def classify_species(image: UploadFile = File(...)) -> ClassificationRespo
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
     logger.info("Read image payload", extra={"size_bytes": len(image_bytes)})
-    # settings = get_settings()
+   
 
     try:
-        predictions_raw = await classify_image(image_bytes, image.content_type)
+        return await classify_image(image_bytes, image.content_type)
     except InferenceError as exc:
         logger.exception("Inference call failed")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-    predictions: List[ModelPrediction] = []
-
-    for prediction in predictions_raw[: os.getenv("STRIKENET_TOP_K", 5)]:
-        species = lookup_species(prediction.label)
-        predictions.append(
-            ModelPrediction(
-                label=prediction.label,
-                score=prediction.score,
-                species=SpeciesMetadata(
-                    common_name=species.common_name,
-                    scientific_name=species.scientific_name,
-                    is_invasive=species.is_invasive,
-                    notes=species.notes or None,
-                ) if species else None,
-            )
-        )
-
-    threshold = os.getenv("STRIKENET_CLASSIFICATION_CONFIDENCE_THRESHOLD", 0.6)
-    decision = "no-match"
-    invasive: bool | None = None
-    top_prediction = predictions[0] if predictions else None
-
-    if top_prediction and top_prediction.species:
-        species = top_prediction.species
-        if top_prediction.score >= threshold:
-            invasive = species.is_invasive
-            decision = (
-                "auto-flagged-invasive" if invasive else "auto-identified-native"
-            )
-        else:
-            invasive = species.is_invasive if species.is_invasive else None
-            decision = "low-confidence"
-    elif top_prediction:
-        decision = "unrecognized-species"
-
-    if not predictions:
-        decision = "no-predictions"
-
-    logger.info(
-        "Classification completed",
-        extra={
-            "decision": decision,
-            "top_label": top_prediction.label if top_prediction else None,
-            "top_score": top_prediction.score if top_prediction else None,
-        },
-    )
-
-    return ClassificationResponse(
-        decision=decision,
-        invasive=invasive,
-        threshold=threshold,
-        top_prediction=top_prediction,
-        predictions=predictions,
-    )
