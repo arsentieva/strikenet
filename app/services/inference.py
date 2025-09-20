@@ -14,15 +14,14 @@ import os
 load_dotenv()
 
 API_KEY = os.getenv("STRIKENET_OPENAI_API_KEY")
-
 logger = logging.getLogger("strikenet.inference")
 logger.setLevel(logging.INFO)
 
 _SYSTEM_PROMPT = (
     "You are a marine wildlife identification assistant. "
-    "When provided with an image, respond ONLY with strict JSON matching this schema: "
-    '{"predictions": [{"label": "lowercase common name", "scientific_name": "string", "confidence": 0.0-1.0}]}. '
-    "Provide at most {top_k} predictions sorted by confidence descending. "
+    "When provided with an image, respond  JSON"
+    # '{"predictions": [{"label": "lowercase common name", "scientific_name": "string", "confidence": 0.0-1.0}]}. '
+    # "Provide at most {top_k} predictions sorted by confidence descending. "
     "Use lowercase for the label field. If unsure, use label \"unknown\" and confidence 0.0."
 )
 
@@ -43,9 +42,8 @@ async def classify_image(image_bytes: bytes, mime_type: str | None) -> List[Mode
     client = OpenAI(api_key=API_KEY)
     image_base64 = base64.b64encode(image_bytes).decode("ascii")
 
-    image_payload: dict[str, str] = {"data": image_base64}
-    if mime_type:
-        image_payload["mime_type"] = mime_type
+    data_uri_mime = mime_type or "image/png"
+    image_data_uri = f"data:{data_uri_mime};base64,{image_base64}"
 
     system_prompt = _SYSTEM_PROMPT.format(top_k=os.getenv("STRIKENET_TOP_K", 5))
 
@@ -58,7 +56,7 @@ async def classify_image(image_bytes: bytes, mime_type: str | None) -> List[Mode
                     "role": "system",
                     "content": [
                         {
-                            "type": "text",
+                            "type": "input_text",
                             "text": system_prompt,
                         }
                     ],
@@ -66,13 +64,13 @@ async def classify_image(image_bytes: bytes, mime_type: str | None) -> List[Mode
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Identify the species in this image."},
-                        {"type": "input_image", "image": image_payload},
+                        {"type": "input_text", "text": "Identify the species in this image."},
+                        {"type": "input_image", "image_url": image_data_uri},
                     ],
                 },
             ],
-            temperature=os.getenv("STRIKENET_OPENAI_TEMPERATURE", 0.0),
-            max_output_tokens=os.getenv("STRIKENET_OPENAI_MAX_OUTPUT_TOKENS", 600),
+            temperature=0.0,
+            max_output_tokens=600,
         )
     except Exception as exc:  # noqa: BLE001 - we want to wrap any client errors
         logger.exception("OpenAI request failed")
