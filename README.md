@@ -1,6 +1,6 @@
 # StrikeNet API
 
-This project exposes a FastAPI service that accepts user-uploaded wildlife photos, sends them to a configurable image-classification model (e.g. a Hugging Face inference endpoint), and reports whether the detected species is invasive in South Florida.
+This FastAPI service accepts user-uploaded wildlife photos, submits them to an OpenAI vision-capable model, and reports whether the detected species is invasive in South Florida.
 
 ## Getting Started
 
@@ -13,15 +13,18 @@ This project exposes a FastAPI service that accepts user-uploaded wildlife photo
    ```bash
    pip install -r requirements.txt
    ```
-3. **Set configuration** via environment variables (prefix `STRIKENET_`):
-   - `STRIKENET_HUGGINGFACE_API_TOKEN` (optional) – token for private or rate-limited models.
-   - `STRIKENET_HUGGINGFACE_MODEL_ID` – defaults to `microsoft/resnet-50`; replace with your marine model.
+3. **Configure environment variables** (prefix `STRIKENET_`):
+   - `STRIKENET_OPENAI_API_KEY` *(required)* – your OpenAI API key with access to vision models.
+   - `STRIKENET_OPENAI_MODEL` – defaults to `gpt-4o-mini`.
+   - `STRIKENET_OPENAI_TEMPERATURE` – defaults to `0.0` for deterministic output.
+   - `STRIKENET_OPENAI_MAX_OUTPUT_TOKENS` – defaults to `600`.
    - `STRIKENET_CLASSIFICATION_CONFIDENCE_THRESHOLD` – defaults to `0.6`.
+   - `STRIKENET_TOP_K` – defaults to `5` predictions.
 
    Example:
    ```bash
-   export STRIKENET_HUGGINGFACE_MODEL_ID="your-org/your-marine-model"
-   export STRIKENET_HUGGINGFACE_API_TOKEN="hf_..."
+   export STRIKENET_OPENAI_API_KEY="sk-..."
+   export STRIKENET_OPENAI_MODEL="gpt-4o-mini"
    ```
 4. **Run the API**:
    ```bash
@@ -33,7 +36,7 @@ This project exposes a FastAPI service that accepts user-uploaded wildlife photo
 ### `POST /api/classify`
 Uploads an image and returns model predictions annotated with invasive-species metadata.
 
-- **Body**: `multipart/form-data` with `image` field.
+- **Body**: `multipart/form-data` with `image` field (JPEG/PNG/etc.).
 - **Response** (`200 OK`):
   ```json
   {
@@ -41,8 +44,8 @@ Uploads an image and returns model predictions annotated with invasive-species m
     "invasive": true,
     "threshold": 0.6,
     "top_prediction": {
-      "label": "lionfish",
-      "score": 0.94,
+      "label": "red lionfish",
+      "score": 0.92,
       "species": {
         "common_name": "Red Lionfish",
         "scientific_name": "Pterois volitans",
@@ -52,8 +55,8 @@ Uploads an image and returns model predictions annotated with invasive-species m
     },
     "predictions": [
       {
-        "label": "lionfish",
-        "score": 0.94,
+        "label": "red lionfish",
+        "score": 0.92,
         "species": {
           "common_name": "Red Lionfish",
           "scientific_name": "Pterois volitans",
@@ -74,10 +77,10 @@ curl -X POST "http://localhost:8000/api/classify" \
 
 ## Species Metadata
 
-Species metadata lives in `app/data/species.py`. Expand this file with additional invasive and native species as you refine the model’s label vocabulary.
+Species metadata lives in `app/data/species.py`. Expand this file with additional invasive and native species as you refine the model’s label vocabulary and alias mappings.
 
 ## Next Steps
 
-- Swap in a marine life classifier (e.g. a fine-tuned iNaturalist checkpoint) and update alias mappings.
+- Tune the OpenAI prompt/temperature to better match your desired confidence scoring.
 - Persist classifications and user feedback to a database for auditing and retraining.
 - Add a manual review queue for low-confidence predictions.

@@ -41,7 +41,7 @@ async def classify_species(image: UploadFile = File(...)) -> ClassificationRespo
     settings = get_settings()
 
     try:
-        predictions_raw = await classify_image(image_bytes)
+        predictions_raw = await classify_image(image_bytes, image.content_type)
     except InferenceError as exc:
         logger.exception("Inference call failed")
         raise HTTPException(status_code=502, detail=str(exc)) from exc

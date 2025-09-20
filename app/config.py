@@ -1,5 +1,4 @@
 from functools import lru_cache
-from typing import Optional
 
 from pydantic import BaseSettings, Field
 
@@ -7,17 +6,20 @@ from pydantic import BaseSettings, Field
 class Settings(BaseSettings):
     """Application configuration loaded from environment variables with prefix STRIKENET_."""
 
-    huggingface_api_token: Optional[str] = Field(
-        default=None,
-        description="Bearer token for Hugging Face Inference API access."
+    openai_api_key: str = Field(
+        ..., description="API key for accessing OpenAI services."
     )
-    huggingface_model_id: str = Field(
-        default="microsoft/resnet-50",
-        description="Default image classification model deployed on Hugging Face."
+    openai_model: str = Field(
+        default="gpt-4o-mini",
+        description="OpenAI model identifier used for vision classification."
     )
-    huggingface_api_url: Optional[str] = Field(
-        default=None,
-        description="Override full Hugging Face Inference API URL if using a custom endpoint."
+    openai_temperature: float = Field(
+        default=0.0,
+        description="Sampling temperature passed to the OpenAI model."
+    )
+    openai_max_output_tokens: int = Field(
+        default=600,
+        description="Maximum number of output tokens requested from the OpenAI model."
     )
     top_k: int = Field(
         default=5,
@@ -31,12 +33,6 @@ class Settings(BaseSettings):
     class Config:
         env_prefix = "STRIKENET_"
         case_sensitive = False
-
-    @property
-    def resolved_huggingface_url(self) -> str:
-        if self.huggingface_api_url:
-            return self.huggingface_api_url
-        return f"https://api-inference.huggingface.co/models/{self.huggingface_model_id}"
 
 
 @lru_cache()
