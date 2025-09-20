@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import logging
 from typing import List
-
 from fastapi import FastAPI, File, HTTPException, UploadFile, status
 
-from app.config import get_settings
 from app.schemas import ClassificationResponse, ModelPrediction, SpeciesMetadata
 from app.services.inference import InferenceError, classify_image
 from app.data.species import lookup_species
+import os
 
 logger = logging.getLogger("strikenet.api")
 logger.setLevel(logging.INFO)
@@ -38,7 +37,7 @@ async def classify_species(image: UploadFile = File(...)) -> ClassificationRespo
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
     logger.info("Read image payload", extra={"size_bytes": len(image_bytes)})
-    settings = get_settings()
+    # settings = get_settings()
 
     try:
         predictions_raw = await classify_image(image_bytes, image.content_type)
@@ -48,7 +47,7 @@ async def classify_species(image: UploadFile = File(...)) -> ClassificationRespo
 
     predictions: List[ModelPrediction] = []
 
-    for prediction in predictions_raw[: settings.top_k]:
+    for prediction in predictions_raw[: os.getenv("STRIKENET_TOP_K", 5)]:
         species = lookup_species(prediction.label)
         predictions.append(
             ModelPrediction(
@@ -63,7 +62,7 @@ async def classify_species(image: UploadFile = File(...)) -> ClassificationRespo
             )
         )
 
-    threshold = settings.classification_confidence_threshold
+    threshold = os.getenv("STRIKENET_CLASSIFICATION_CONFIDENCE_THRESHOLD", 0.6)
     decision = "no-match"
     invasive: bool | None = None
     top_prediction = predictions[0] if predictions else None

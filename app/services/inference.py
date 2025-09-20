@@ -8,8 +8,12 @@ import logging
 from dataclasses import dataclass
 from typing import List
 from openai import OpenAI
+from dotenv import load_dotenv
+import os
 
-from app.config import get_settings
+load_dotenv()
+
+API_KEY = os.getenv("STRIKENET_OPENAI_API_KEY")
 
 logger = logging.getLogger("strikenet.inference")
 logger.setLevel(logging.INFO)
@@ -35,23 +39,20 @@ class ModelPrediction:
 
 async def classify_image(image_bytes: bytes, mime_type: str | None) -> List[ModelPrediction]:
     """Send the image to the configured OpenAI vision-capable model."""
-    settings = get_settings()
-    if not settings.openai_api_key:
-        raise InferenceError("OpenAI API key is not configured")
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=API_KEY)
     image_base64 = base64.b64encode(image_bytes).decode("ascii")
 
     image_payload: dict[str, str] = {"data": image_base64}
     if mime_type:
         image_payload["mime_type"] = mime_type
 
-    system_prompt = _SYSTEM_PROMPT.format(top_k=settings.top_k)
+    system_prompt = _SYSTEM_PROMPT.format(top_k=os.getenv("STRIKENET_TOP_K", 5))
 
     try:
         response = await asyncio.to_thread(
             client.responses.create,
-            model=settings.openai_model,
+            model=os.getenv("STRIKENET_OPENAI_MODEL", "gpt-4o-mini"),
             input=[
                 {
                     "role": "system",
@@ -70,8 +71,8 @@ async def classify_image(image_bytes: bytes, mime_type: str | None) -> List[Mode
                     ],
                 },
             ],
-            temperature=settings.openai_temperature,
-            max_output_tokens=settings.openai_max_output_tokens,
+            temperature=os.getenv("STRIKENET_OPENAI_TEMPERATURE", 0.0),
+            max_output_tokens=os.getenv("STRIKENET_OPENAI_MAX_OUTPUT_TOKENS", 600),
         )
     except Exception as exc:  # noqa: BLE001 - we want to wrap any client errors
         logger.exception("OpenAI request failed")
