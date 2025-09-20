@@ -1,13 +1,13 @@
 """Wrapper around external image classification using OpenAI vision models."""
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
 from dataclasses import dataclass
 from typing import List
-
-from openai import AsyncOpenAI
+from openai import OpenAI
 
 from app.config import get_settings
 
@@ -39,7 +39,7 @@ async def classify_image(image_bytes: bytes, mime_type: str | None) -> List[Mode
     if not settings.openai_api_key:
         raise InferenceError("OpenAI API key is not configured")
 
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key)
     image_base64 = base64.b64encode(image_bytes).decode("ascii")
 
     image_payload: dict[str, str] = {"data": image_base64}
@@ -49,7 +49,8 @@ async def classify_image(image_bytes: bytes, mime_type: str | None) -> List[Mode
     system_prompt = _SYSTEM_PROMPT.format(top_k=settings.top_k)
 
     try:
-        response = await client.responses.create(
+        response = await asyncio.to_thread(
+            client.responses.create,
             model=settings.openai_model,
             input=[
                 {
